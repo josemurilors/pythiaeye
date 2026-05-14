@@ -1,0 +1,4 @@
+# Internal specification documents - architecture reference only
+# Not tracked in git to avoid drift between spec and code
+doc.md
+SPEC.md
