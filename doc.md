@@ -1,19 +1,19 @@
-# PythiaEye — Intelligent Alert Diagnosis
+# PythiaEye — Diagnóstico Inteligente de Alertas
 
-## Stack Completo
+## Stack
 
-### Servidor Central (máquina local — Docker)
+### Servidor Central (Docker)
 
 | Componente | Imagem | Função |
 |---|---|---|
-| VictoriaMetrics | `victoriametrics/victoria-metrics:latest` | Métricas centralizadas (10x menos RAM que Prometheus, compressão superior, remote write nativo) |
+| VictoriaMetrics | `victoriametrics/victoria-metrics:latest` | Métricas centralizadas (RAM ↓10× vs Prometheus, remote write) |
 | Loki | `grafana/loki:latest` | Logs centralizados |
 | Grafana | `grafana/grafana:latest` | Dashboard + alertas |
 | Alertmanager | `prom/alertmanager:latest` | Roteamento de alertas |
-| Nginx + Certbot | `nginx:latest` + `certbot/certbot` | Reverse proxy com SSL/TLS para todas as rotas (Grafana, Loki, API) |
-| FastAPI + Análise | **Custom Python** | Anomalias + ponte com LLM |
+| Nginx + Certbot | `nginx:latest` + `certbot/certbot` | Reverse proxy SSL/TLS (Grafana, Loki, API) |
+| FastAPI + Análise | **Custom Python** | Anomalias + ponte LLM |
 | Ollama | `ollama/ollama:latest` | LLM local (grátis, fallback primário) |
-| PostgreSQL | `postgres:16-alpine` | Baseline histórica + metadados + silent mode |
+| PostgreSQL | `postgres:16-alpine` | Baseline + metadados + silent mode |
 
 ### Cada VPS (2-3 servidores remotos)
 
@@ -73,10 +73,10 @@ VPS 3 (idem) ────────────────>│  │  ├─�
                               │                                      │
                               │  ┌────────────────────────────────┐ │
                               │  │ PostgreSQL                      │ │
-                              │  │  ├── baselines por métrica/VPS  │ │
-                              │  │  ├── alertas silent mode        │ │
-                              │  │  ├── feedback do usuário        │ │
-                              │  │  └── runbooks de mitigação      │ │
+                              │  │  ├── metric_baselines (sazonal) │ │
+                              │  │  ├── alert_queue (c/ fingerpr.) │ │
+                              │  │  ├── mitigation_playbooks       │ │
+                              │  │  └── incident_logs (auditoria)  │ │
                               │  └────────────────────────────────┘ │
                               └──────────────────────────────────────┘
 ```
@@ -89,25 +89,25 @@ Fluxo dos dados:
 
 ---
 
-## Filosofia de Alertas — Conservador nas Notificações, Verboso na Análise
+## Filosofia de Alertas — Notificação Conservadora, Análise Verbosa
 
-Um sistema que "pega tudo" cria fadiga de alertas. Em ambientes de equipe enxuta (como administração pública), 50 notificações/dia viram ruído de fundo em uma semana.
+Sistema "pega tudo" → fadiga. Equipe enxuta → 50 notifs/dia = ruído em 1 semana.
 
-**Regra de ouro:**
-- **Dashboard**: verboso — mostre tudo (métricas cruas, sazonalidade, resíduos, topologia)
-- **Notificações**: conservadoras — só notifique quando a confiança for >95%
+**Regra:**
+- **Dashboard**: verboso — métricas cruas, sazonalidade, resíduos, topologia
+- **Notificações**: só se confiança > 95%
 
-A métrica de sucesso do produto não é "quantos alertas detectamos", mas sim **Taxa de Relevância**:
+**Métrica de sucesso** = Taxa de Relevância:
 ```
 Relevância = AlertasConfirmados / AlertasNotificados
 ```
-Se o sistema avisar que o servidor vai cair e ele cair → cliente fiel. Se avisar 10x e nada acontecer → autoridade perdida.
+Servidor caiu e sistema avisou → confiança. Falso alarme 10× → autoridade perdida.
 
 ---
 
-## Confidence Score — O Modelo Probabilístico
+## Confidence Score — Modelo Probabilístico
 
-Em vez de decidir entre "alerta" ou "silêncio", o sistema atribui uma pontuação de confiança contínua (0-100%) à anomalia.
+Sistema atribui confiança contínua (0-100%) à anomalia — não decisão binária alerta/silêncio.
 
 ### Fórmula
 
@@ -118,18 +118,18 @@ Confiança(%) = min(100, max(0,
 ```
 
 Onde:
-- `Anomalia_atual` = valor observado da métrica
-- `Média_sazonal` = média esperada para aquela hora/dia (da baseline seasonal decompose)
-- `DesvioPadrão` = stddev histórico para aquele período
+- `Anomalia_atual` = valor observado
+- `Média_sazonal` = média esperada p/ hora/dia (baseline)
+- `DesvioPadrão` = stddev histórico p/ período
 - `FatorDeRisco` = peso configurável por métrica (ex: CPU=1.5, MEM=1.0, DISK=0.8)
 
-### Três Faixas de Ação
+### Três Faixas
 
 | Confiança | Classificação | Ação | Canal |
 |---|---|---|---|
-| >95% | **Crítico** | Notificação push com som + diagnóstico LLM | Slack/Discord + SMS (se configurado) |
-| 70-90% | **Preditivo** | Aparece no feed "Sugestões de Otimização" do dashboard | Dashboard apenas |
-| <70% | **Silencioso** | Registra no banco para alimentar modelo | Nenhum |
+| >95% | Crítico | Push + som + diagnóstico LLM | Slack/Discord (+SMS ?) |
+| 70-90% | Preditivo | Feed "Sugestões de Otimização" | Dashboard |
+| <70% | Silencioso | Registra no banco | Nenhum |
 
 ### Implementação no Código
 
@@ -137,7 +137,7 @@ Onde:
 def calcular_confianca(metrica_atual, baseline, metric_config):
     desvio = abs(metrica_atual - baseline['media_sazonal'])
     score = desvio / (baseline['stddev'] * metric_config['fator_risco'])
-    confianca = min(100, max(0, score * 100))
+    confianca = round(min(100, max(0, score * 100)), 2)  # NUMERIC(5,2)
 
     if confianca >= 95:
         return 'CRITICO', confianca
@@ -256,15 +256,15 @@ def decidir_notificacao(anomalia, ciclos_anteriores=3):
 
 ```
 Confiança > 95% (CRÍTICO)
-  ├── Já tem 3+ ciclos de baseline? → Notifica push + LLM + Slack
-  └── Menos de 3 ciclos? → Registra no banco (SILENCIOSO)
+  ├── 3+ ciclos baseline? → Notifica push + LLM + Slack
+  └── <3 ciclos? → Registra (SILENCIOSO)
 
 Confiança 70-90% (PREDITIVO)
-  ├── Aparece no feed "Sugestões de Otimização" do dashboard
-  └── NUNCA notifica push
+  ├── Feed "Sugestões de Otimização" no dashboard
+  └── ! notifica push
 
 Confiança < 70% (SILENCIOSO)
-  └── Apenas registra no PostgreSQL para calibrar modelo futuro
+  └── Registra no PostgreSQL → calibra modelo futuro
 ```
 
 21. **Entregável**: alertas silenciam em horários sabidamente altos (ex: quarta 14h). Falsos positivos <5%. Zero falso positivo crítico (Confiança >95%) após Grace Period.
@@ -276,15 +276,18 @@ Confiança < 70% (SILENCIOSO)
 
 ```python
 async def diagnosticar(alerta):
-    try:
-        result = await call_ollama(prompt, timeout=5.0)
-        return result
-    except (TimeoutError, ConnectionError):
+    for attempt in range(3):
         try:
-            result = await call_groq(prompt, model="mixtral-8x7b-32768")
-            return result
-        except:
-            return {"erro": "LLM indisponivel", "alerta_cru": alerta}
+            return await call_ollama(prompt, timeout=30.0)
+        except (TimeoutError, ConnectionError) as e:
+            if attempt < 2:
+                wait = 5 * (attempt + 1)  # backoff: 5min, 10min
+                await reenfileirar(alerta.id, wait, str(e))
+                return None
+            try:
+                return await call_groq(prompt, model="mixtral-8x7b-32768")
+            except:
+                return {"erro": "LLM indisponivel", "alerta_cru": alerta}
 ```
 
 24. Prompt template para o LLM:
@@ -296,10 +299,8 @@ Confianca: {{ confianca }}% ({{ classificacao }})
 Logs dos ultimos 5 minutos:
 {{ logs_erro }}
 
-Responda EXATAMENTE neste formato:
-CAUSA_PROVAVEL: <1 linha>
-COMANDO_MITIGACAO: <comando shell que resolve>
-GRAVIDADE: <baixa/media/alta>
+Responda EXATAMENTE neste formato JSON:
+{"causa_provavel": "<1 linha>", "playbook_id": <int>, "playbook_args": ["<arg1>", ...], "gravidade": "<baixa|media|alta>", "confianca": <0.0-1.0>, "rationale": "<breve explicacao>"}
 ```
 
 25. Implementar `slack_notifier.py`: posta diagnóstico formatado no Slack/Discord
@@ -321,49 +322,48 @@ GRAVIDADE: <baixa/media/alta>
 
 | Decisão | Justificativa |
 |---|---|
-| Holt-Winters para CPU | CPU tem sazonalidade clara (hora do dia, dia da semana) + tendência. HW captura ambos. |
-| EWMA para latência | Latência varia rápido; EWMA dá peso exponencial a observações recentes, reagindo rápido a mudanças sem ser ruidoso. |
-| Média Móvel para memória/disco | Métricas monotônicas (crescem, não oscilam). Média móvel detecta deriva. |
-| Seasonal Decompose para conexões TCP | Conexões seguem padrão sazonal forte. Decompose separa padrão de anomalia. |
+| Holt-Winters p/ CPU | CPU tem sazonalidade (hora, dia) + tendência. HW captura ambos. |
+| EWMA p/ latência | Latência varia rápido; EWMA reage rápido sem ruído. |
+| Média Móvel p/ memória/disco | Métricas monotônicas (crescem, não oscilam). MM detecta deriva. |
+| Seasonal Decompose p/ conexões TCP | Conexões seguem sazonalidade forte. Decompose separa padrão de anomalia. |
 
 ### Cold Start
 
-- Sem dados históricos? Silent Mode por 7 dias.
-- Baseline é calculada com `statsmodels.tsa.seasonal_decompose` com `period=24h` e `period=168h` (semanal).
-- Após 7 dias: relatório de calibração com top-N anomalias para feedback humano.
-- Feedback ajusta os coeficientes dos modelos (bayesian update simples no PostgreSQL).
+- Sem dados históricos? Silent Mode 7d.
+- Baseline via `statsmodels.tsa.seasonal_decompose` c/ `period=24h` + `period=168h` (semanal).
+- 7d depois: relatório de calibração c/ top-N anomalias → feedback humano.
+- Feedback ajusta coeficientes (bayesian update simples no PostgreSQL).
 
-### Fórmulas dos Thresholds
+### Thresholds
 
-#### Threshold por Métrica (gatilho da anomalia)
+#### Threshold por Métrica (gatilho)
 
 ```
-CPU:  P95(30min) > media_historica_P95 + 0.5 * stddev_historico_P95
-MEM:  |mem_atual - mem_5min_atras| / mem_5min_atras > 0.05  (5%/h)
-DISK: |disk_atual - disk_24h_atras| / disk_24h_atras > 0.10  (10%/dia)
-LAT:  lat_atual > 3 * median(lat_ultimas_24h)
+CPU:  P95(30min) > media_P95_hist + 0.5 * stddev_P95_hist
+MEM:  |atual - 5min_atras| / 5min_atras > 0.05  (5%/h)
+DISK: |atual - 24h_atras| / 24h_atras > 0.10  (10%/dia)
+LAT:  atual > 3 * median(lat_24h)
 TCP:  residuo_decompose > 4 * stddev(residuo)
 ```
 
-#### Confidence Score (pós-anomalia, decide a ação)
+#### Confidence Score (pós-anomalia)
 
 ```
-desvio = |metrica_atual - media_sazonal|
+desvio = |atual - media_sazonal|
 confianca = min(100, desvio / (stddev_sazonal × fator_risco) × 100)
 
 Ação:
-  confianca >= 95 → CRÍTICO  → notifica
-  confianca >= 70 → PREDITIVO → dashboard
-  confianca < 70  → SILENCIOSO → banco
+  ≥95 → CRÍTICO → notifica
+  ≥70 → PREDITIVO → dashboard
+  <70 → SILENCIOSO → banco
 ```
 
-#### Grace Period (segurança contra cold start)
+#### Grace Period
 
 ```
-Se n_ciclos_anteriores < 3:
-    notificacao = False  # ainda aprendendo o padrão
-    nivel = SILENCIOSO   # registra mas não incomoda
-```
+n_ciclos < 3:
+    notificacao = False  # aprendendo
+    nivel = SILENCIOSO
 
 ---
 
@@ -371,11 +371,12 @@ Se n_ciclos_anteriores < 3:
 
 | Camada | Implementação |
 |---|---|
-| Transporte | Nginx termina SSL/TLS (Let's Encrypt). Todas as rotas em HTTPS. |
-| Autenticação | Grafana com autenticação integrada. Loki e API protegidos por proxy basic auth. |
-| Rate Limit | Nginx limita 100 req/min por IP no /api. |
-| Isolamento | Rede Docker interna (bridge). Nginx é única porta exposta (443). |
-| Logs sanitizados | LLM bridge remove IPs, tokens, dados de cliente antes de enviar ao Ollama/Groq. |
+| Transporte | Nginx termina SSL/TLS (Let's Encrypt). ∀ rota HTTPS. |
+| Autenticação | Grafana auth integrada. Loki + API protegidos via basic auth. |
+| Rate Limit | Nginx → 100 req/min/IP em /api. |
+| Isolamento | Docker bridge interna. Nginx = única porta exposta (443). |
+| Logs sanitizados | LLM bridge remove IPs, tokens, dados cliente antes de enviar. |
+| Execução segura | LLM ! gera comandos shell. Retorna `playbook_id` (FK → `mitigation_playbooks`) + args sanitizados. Validação rígida de args antes de exec. |
 
 ---
 

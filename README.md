@@ -23,10 +23,16 @@ O repositório contém dois documentos:
 
 | Arquivo | O que é |
 |---------|---------|
-| [`SPEC.md`](SPEC.md) | Especificação técnica completa — 24 tarefas, 12 invariantes, validação |
-| [`doc.md`](doc.md) | Blueprint de arquitetura original (português) |
+| [`SPEC.md`](SPEC.md) | Especificação técnica completa — 24 tarefas, 13 invariantes, 13 checks, schema final |
+| [`doc.md`](doc.md) | Blueprint de arquitetura revisado (4 tabelas, retry backoff, playbooks seguros) |
 
 Nada foi implementado. O código em Python, Docker Compose, Terraform, scripts de agente, dashboards — tudo está por fazer.
+
+O design do schema PostgreSQL foi finalizado após revisão crítica:
+- `alert_queue` c/ dedup por fingerprint + retry backoff
+- `metric_baselines` para sazonalidade (dia + hora)
+- `mitigation_playbooks` — ações homologadas (sem shell injection)
+- `incident_logs` — auditoria com `ON DELETE SET NULL`
 
 ## Para contribuir
 
