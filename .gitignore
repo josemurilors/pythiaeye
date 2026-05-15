@@ -1,4 +1,28 @@
-# Internal specification documents - architecture reference only
-# Not tracked in git to avoid drift between spec and code
-doc.md
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Internal specification documents
 SPEC.md
+doc.md
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

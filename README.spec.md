@@ -22,6 +22,7 @@ The following decisions were converged after a critical review of the PostgreSQL
 | **`retry_count` + `next_retry_at`** | Worker retries with exponential backoff (5min, 10min, 15min). Alert survives Ollama timeout instead of dying as `failed`. |
 | **`mitigation_playbooks` table** | LLM never generates raw shell commands. Returns `playbook_id` (FK) + sanitized args. Prevents command injection. |
 | **`incident_logs` with `ON DELETE SET NULL`** | Housekeeping deletes old alerts but preserves audit trail. Diagnosis survives cleanup. |
+| **Z→confidence formula** | `z_to_confidence()` maps Z-score [3.5, 10] → confidence [0%, 100%]. Z=3.5=0%, Z=10=100%. Solves the MAD-to-percentage gap. |
 | **Two indexes** | `idx_alert_queue_dedup_active` (unique partial for inserts) + `idx_alert_queue_worker_lookup` (composite for `FOR UPDATE SKIP LOCKED` sort by confidence). |
 
 ### Current status
@@ -55,6 +56,7 @@ As seguintes decisões foram convergidas após revisão crítica do schema Postg
 | **`retry_count` + `next_retry_at`** | Worker retenta com backoff exponencial (5min, 10min, 15min). Alerta sobrevive a timeout do Ollama. |
 | **Tabela `mitigation_playbooks`** | LLM nunca gera comandos shell brutos. Retorna `playbook_id` (FK) + args sanitizados. Previne command injection. |
 | **`incident_logs` com `ON DELETE SET NULL`** | Housekeeping deleta alertas velhos mas preserva auditoria. Diagnóstico sobrevive ao cleanup. |
+| **Fórmula Z→confiança** | `z_to_confidence()` mapeia Z [3.5, 10] → confiança [0%, 100%]. Z=3.5=0%, Z=10=100%. Fecha lacuna MAD→percentual. |
 | **Dois índices** | `idx_alert_queue_dedup_active` (unique partial para inserts) + `idx_alert_queue_worker_lookup` (composto para `FOR UPDATE SKIP LOCKED` ordenado por confiança). |
 
 ### Estado atual

@@ -1,0 +1,107 @@
+@import "tailwindcss";
+
+@theme {
+  --color-gold: #F5B041;
+  --color-gold-light: #F7DC6F;
+  --color-gold-dark: #B7950B;
+  --color-magenta: #E74C3C;
+  --color-magenta-glow: #FF0066;
+  --color-black: #050505;
+  --color-black-2: #0a0a0a;
+  --color-surface: #111111;
+  --color-surface-2: #1a1a1a;
+  --font-sans: 'Plus Jakarta Sans', sans-serif;
+  --font-mono: 'DM Mono', monospace;
+}
+
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+html.lenis, html.lenis body { height: auto; }
+.lenis.lenis-smooth { scroll-behavior: auto; }
+.lenis.lenis-smooth [data-lenis-prevent] { overscroll-behavior: contain; }
+
+body {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  background: var(--color-black);
+  color: #ffffff;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#bg-mesh {
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background:
+    radial-gradient(ellipse 60% 50% at 20% 30%, rgba(245,176,65,0.06) 0%, transparent 70%),
+    radial-gradient(ellipse 50% 60% at 80% 70%, rgba(255,0,102,0.04) 0%, transparent 70%),
+    radial-gradient(ellipse 40% 40% at 50% 0%, rgba(245,176,65,0.03) 0%, transparent 60%);
+}
+
+#grain {
+  position: fixed; inset: 0; z-index: 1; pointer-events: none; opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 256px 256px;
+}
+
+.reveal {
+  opacity: 0; transform: translateY(40px); filter: blur(4px);
+  transition: all 0.9s cubic-bezier(0.32,0.72,0,1);
+}
+.reveal.visible { opacity: 1; transform: translateY(0); filter: blur(0); }
+
+.reveal-delay-1 { transition-delay: 0.1s; }
+.reveal-delay-2 { transition-delay: 0.2s; }
+.reveal-delay-3 { transition-delay: 0.3s; }
+.reveal-delay-4 { transition-delay: 0.4s; }
+.reveal-delay-5 { transition-delay: 0.5s; }
+.reveal-delay-6 { transition-delay: 0.6s; }
+
+.btn-primary {
+  display: inline-flex; align-items: center; gap: 10px;
+  padding: 14px 28px 14px 32px;
+  background: linear-gradient(135deg, var(--color-gold-dark), var(--color-gold));
+  color: var(--color-black); text-decoration: none; font-weight: 700; font-size: 15px;
+  border-radius: 100px; border: none; cursor: pointer;
+  transition: all 0.4s cubic-bezier(0.32,0.72,0,1);
+}
+.btn-primary:hover { transform: scale(1.04); }
+.btn-primary .arrow {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: rgba(0,0,0,0.15); display: flex; align-items: center; justify-content: center;
+  transition: transform 0.4s cubic-bezier(0.32,0.72,0,1);
+}
+.btn-primary:hover .arrow { transform: translate(3px, -2px); }
+
+.btn-secondary {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 14px 28px;
+  border: 1px solid rgba(255,255,255,0.1); border-radius: 100px;
+  color: rgba(255,255,255,0.8); text-decoration: none; font-weight: 600; font-size: 15px;
+  transition: all 0.4s cubic-bezier(0.32,0.72,0,1);
+}
+.btn-secondary:hover { border-color: rgba(255,255,255,0.3); background: rgba(255,255,255,0.05); }
+
+.tag-api { background: rgba(245,176,65,0.15); color: var(--color-gold-light); }
+.tag-db { background: rgba(255,0,102,0.15); color: var(--color-magenta-glow); }
+.tag-metrics { background: rgba(100,200,255,0.12); color: #64C8FF; }
+.tag-llm { background: rgba(160,100,255,0.12); color: #A064FF; }
+.tag-agent { background: rgba(0,220,180,0.12); color: #00DCB4; }
+
+@media (max-width: 768px) {
+  .btn-primary, .btn-secondary { font-size: 14px; }
+  .dash-card > div[style*="padding: 32px"] { padding: 20px !important; }
+}
+
+@media (max-width: 480px) {
+  .hero-ctas { flex-direction: column; width: 100%; }
+  .btn-primary, .btn-secondary { width: 100%; justify-content: center; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+  .reveal { opacity: 1; transform: none; filter: none; }
+}
